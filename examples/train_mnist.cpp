@@ -84,8 +84,8 @@ int main()
 	std::vector<int> train_labels;
 
 	// calls MNIST::parse_test_data  or  CIFAR10::parse_test_data depending on 'using'
-	if (!parse_test_data(data_path, test_images, test_labels)) { std::cerr << "error: could not parse data.\n"; return 1; }
-	if (!parse_train_data(data_path, train_images, train_labels)) { std::cerr << "error: could not parse data.\n"; return 1; }
+	if (!parse_test_data(data_path, test_images, test_labels)) { std::cerr << "error: could not parse test data.\n"; return 1; }
+	if (!parse_train_data(data_path, train_images, train_labels)) { std::cerr << "error: could not parse train data.\n"; return 1; }
 
 	// ==== setup the network  - when you train you must specify an optimizer ("sgd", "rmsprop", "adagrad", "adam")
 	mojo::network cnn(solver.c_str());
