@@ -45,6 +45,8 @@
 #include <util.h>
 #include "mnist_parser.h"
 
+#define EPOCH_LIMIT 10
+
 const int mini_batch_size = 24;
 const float initial_learning_rate = 0.04f;
 std::string solver = "adam";
@@ -74,7 +76,7 @@ float test(mojo::network &cnn, const std::vector<std::vector<float>> &test_image
 }
 
 
-int main()
+int main(int argc, char *argv[])
 {
 	// ==== parse data
 	// array to hold image data (note that mojo does not require use of std::vector)
@@ -90,11 +92,15 @@ int main()
 	// ==== setup the network  - when you train you must specify an optimizer ("sgd", "rmsprop", "adagrad", "adam")
 	mojo::network cnn(solver.c_str());
 	// !! the threading must be enabled with thread count prior to loading or creating a model !!
-	cnn.enable_external_threads();
+
+	// std::cout << "_thread_count befor is : " <<  cnn.get_thread_count() <<std::endl;
+	cnn.enable_external_threads(5);
+	// std::cout << "_thread_count after is : " <<  cnn.get_thread_count() <<std::endl;
+
 	cnn.set_mini_batch_size(mini_batch_size);
 	cnn.set_smart_training(true); // automate training
 	cnn.set_learning_rate(initial_learning_rate);
-	
+
 	// Note, network descriptions can be read from a text file with similar format to the API
 	cnn.read("../models/mnist_quickstart.txt");
 
@@ -125,9 +131,14 @@ int main()
 	// setup timer/progress for overall training
 	mojo::progress overall_progress(-1, "  overall:\t\t");
 	const int train_samples = (int)train_images.size();
-	float old_accuracy = 0; 
+	float old_accuracy = 0;
+
+	std::cout << "size of train_samples is : " <<  train_samples <<std::endl;
+
+	int cnt = 0;
 	while (1)
 	{
+		cnt++;
 		overall_progress.draw_header(data_name() + "  Epoch  " + std::to_string((long long)cnn.get_epoch() + 1), true);
 		// setup timer / progress for this one epoch
 		mojo::progress progress(train_samples, "  training:\t\t");
@@ -194,6 +205,11 @@ int main()
 		if (cnn.elvis_left_the_building())
 		{
 			std::cout << "Elvis just left the building. No further improvement in training found.\nStopping.." << std::endl;
+			break;
+		}
+
+		if (cnt==EPOCH_LIMIT) {
+			std::cout << "Elvis just left the building. Too much iteration " << EPOCH_LIMIT << " \nStopping.." << std::endl;
 			break;
 		}
 

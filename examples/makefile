@@ -7,7 +7,7 @@ test: test.cpp
 	$(CC) $(CFLAGS_OMP) test.cpp -o test
 
 train_mnist: train_mnist.cpp
-	$(CC) $(CFLAGS_OMP) train_mnist.cpp -o train_mnist
+	$(CC) $(CFLAGS_OMP) train_mnist.cpp -o3 -o train_mnist_5p_o3
 
 train_cifar: train_cifar.cpp 
 	$(CC) $(CFLAGS_OMP) train_cifar.cpp -o train_cifar
