@@ -28,10 +28,7 @@
 
 #pragma once
 
-#ifndef MOJO_AVX
 #define MOJO_AVX	// turn on AVX / SSE3 / SIMD optimizations
-#endif
-
 #define MOJO_OMP	// allow multi-threading through openmp
 //#define MOJO_LUTS	// use look up tables, uses more memory
 //#define MOJO_CV3	// use OpenCV 3.x utilities

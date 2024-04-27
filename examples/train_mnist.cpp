@@ -37,7 +37,6 @@
 #include <sstream>
 #include <fstream>
 #include <stdio.h>
-// #include <aligned_new>
 //#include <tchar.h>
 
 //#define MOJO_CV3
@@ -45,8 +44,6 @@
 #include <mojo.h>  
 #include <util.h>
 #include "mnist_parser.h"
-
-#define EPOCH_LIMIT 10
 
 const int mini_batch_size = 24;
 const float initial_learning_rate = 0.04f;
@@ -77,7 +74,7 @@ float test(mojo::network &cnn, const std::vector<std::vector<float>> &test_image
 }
 
 
-int main(int argc, char *argv[])
+int main()
 {
 	// ==== parse data
 	// array to hold image data (note that mojo does not require use of std::vector)
@@ -93,15 +90,11 @@ int main(int argc, char *argv[])
 	// ==== setup the network  - when you train you must specify an optimizer ("sgd", "rmsprop", "adagrad", "adam")
 	mojo::network cnn(solver.c_str());
 	// !! the threading must be enabled with thread count prior to loading or creating a model !!
-
-	// std::cout << "_thread_count befor is : " <<  cnn.get_thread_count() <<std::endl;
-	cnn.enable_external_threads(1);
-	// std::cout << "_thread_count after is : " <<  cnn.get_thread_count() <<std::endl;
-
+	cnn.enable_external_threads();
 	cnn.set_mini_batch_size(mini_batch_size);
 	cnn.set_smart_training(true); // automate training
 	cnn.set_learning_rate(initial_learning_rate);
-
+	
 	// Note, network descriptions can be read from a text file with similar format to the API
 	cnn.read("../models/mnist_quickstart.txt");
 
@@ -132,14 +125,9 @@ int main(int argc, char *argv[])
 	// setup timer/progress for overall training
 	mojo::progress overall_progress(-1, "  overall:\t\t");
 	const int train_samples = (int)train_images.size();
-	float old_accuracy = 0;
-
-	std::cout << "size of train_samples is : " <<  train_samples <<std::endl;
-
-	int cnt = 0;
+	float old_accuracy = 0; 
 	while (1)
 	{
-		cnt++;
 		overall_progress.draw_header(data_name() + "  Epoch  " + std::to_string((long long)cnn.get_epoch() + 1), true);
 		// setup timer / progress for this one epoch
 		mojo::progress progress(train_samples, "  training:\t\t");
@@ -153,29 +141,6 @@ int main(int argc, char *argv[])
 			cnn.train_class(train_images[k].data(), train_labels[k]);
 			if (k % 1000 == 0) progress.draw_progress(k);
 		}
-
-		#pragma omp parallel for schedule(dynamic)  // schedule dynamic to help make progress bar work correctly
-		for (int k = 0; k<train_samples; k++)
-		{
-			cnn.train_class_back();
-			// if (k % 1000 == 0) progress.draw_progress(k);
-		}
-		    // #pragma omp parallel for schedule(dynamic)
-			// for (int k = 0; k < train_samples; k++) {
-			// 	train_class(train_images[k], train_labels[k]);
-			// 	if (k % 1000 == 0) {
-			// 		#pragma omp critical
-			// 		draw_progress(k);
-			// 	}
-			// }
-
-			// // Second parallel section for backward training (backpropagation)
-			// #pragma omp parallel for schedule(dynamic)
-			// for (int k = 0; k < train_samples; k++) {
-			// 	train_class_back();
-			// 	// Optionally update progress here if needed
-			// 	// if (k % 1000 == 0) draw_progress(k);
-			// }
 
 		// draw weights of main convolution layers
 		#ifdef MOJO_CV3
@@ -229,11 +194,6 @@ int main(int argc, char *argv[])
 		if (cnn.elvis_left_the_building())
 		{
 			std::cout << "Elvis just left the building. No further improvement in training found.\nStopping.." << std::endl;
-			break;
-		}
-
-		if (cnt==EPOCH_LIMIT) {
-			std::cout << "Elvis just left the building. Too much iteration " << EPOCH_LIMIT << " \nStopping.." << std::endl;
 			break;
 		}
 

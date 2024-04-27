@@ -237,7 +237,7 @@ public:
 	
 
 	network(const char* opt_name=NULL): _thread_count(1), _skip_energy_level(0.f), _batch_size(1) 
-	{
+	{ 
 		_internal_thread_count=1;
 		_size=0;  
 		_solver = new_solver(opt_name);
@@ -322,7 +322,6 @@ public:
 	{
 #ifdef MOJO_OMP
 		if (threads < 1) threads = omp_get_num_procs();
-
 		_thread_count = threads;
 		if(_internal_thread_count<=_thread_count) omp_set_num_threads(_thread_count);
 		omp_set_nested(1);

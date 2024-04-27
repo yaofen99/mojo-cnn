@@ -35,7 +35,6 @@
 #include <cstdlib>
 #include <random>
 #include <algorithm> 
-#include <immintrin.h>
 
 
 namespace mojo
