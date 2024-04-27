@@ -1,5 +1,6 @@
-CC=/opt/intel/oneapi/2024.1/bin/icpx
-CFLAGS_OMP= -I../mojo/ -std=c++11 -qopenmp -DMOJO_OPM -DMOJO_AVX -msse4 -mavx2 -mrdrnd -I/opt/intel/oneapi/2024.1/opt/ippcp/tools/intel64
+# CC=/opt/intel/oneapi/2024.1/bin/icpx
+CC=g++
+CFLAGS_OMP= -I../mojo/ -std=c++11 -fopenmp -DMOJO_OPM -DMOJO_AVX -msse4 -mavx2 -mrdrnd -I/opt/intel/oneapi/2024.1/opt/ippcp/tools/intel64
 
 all: test train_mnist train_cifar
 
