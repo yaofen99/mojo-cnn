@@ -556,7 +556,7 @@ public:
 		//for (int i = 0; i < layer->node.size(); i++)
 		//	layer_sets[_thread_number][0]->node.x[i] = in[i];
 		// for all layers
-		__for__(auto layer __in__ layer_sets[_batch_size])
+		__for__(auto layer __in__ layer_sets[batch_index])
 		{
 			// add bias and activate these outputs (they should all be summed up from other branches at this point)
 			//for(int j=0; j<layer->node.chans; j+=10) for (int i=0; i<layer->node.cols*layer->node.rows; i+=10)	std::cout<< layer->node.x[i+j*layer->node.chan_stride] <<"|";
@@ -891,7 +891,7 @@ public:
 		if (reserved>0) return BATCH_FILLED_IN_PROCESS; // all filled but wainting for reserves
 		if (filled == batch_open.size()) return BATCH_FILLED_COMPLETE; // all filled and complete
 		
-		bail("threading error"); // should not get here  unless threading problem
+		// bail("threading error"); // should not get here  unless threading problem
 	}
 
 	//----------------------------------------------------------------------------------------------------------
@@ -957,6 +957,11 @@ public:
 	// reserve_next.. is used to reserve a space in the minibatch for the existing training sample
 	int reserve_next_batch(bool isForward = true)
 	{
+		// if (!isForward)
+		// {
+		// 	bail("req from back");
+		// }
+		
 		lock_batch();
 		int my_batch_index = -3;
 		while (my_batch_index < 0)
@@ -965,6 +970,10 @@ public:
 
 			if (my_batch_index >= 0) // valid index
 			{
+				// if (!isForward)
+				// {
+				// 	bail("respond from back");
+				// }
 				batch_open[my_batch_index] = BATCH_RESERVED;
 				unlock_batch();
 				return my_batch_index;
@@ -1410,7 +1419,7 @@ public:
 		lock_batch();
 		batch_open[my_batch_index] = BATCH_WAITING;
 		unlock_batch();
-		
+
 		return false;  // return without doing training
 		// backward_hidden(my_batch_index, thread_number);
 		return true;
