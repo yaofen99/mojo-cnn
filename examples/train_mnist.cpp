@@ -137,16 +137,12 @@ int main(int argc, char *argv[])
 	std::cout << "size of train_samples is : " <<  train_samples <<std::endl;
 
 	int cnt = 0;
-	omp_set_nested(1); // Enable nested parallelism
-    omp_set_max_active_levels(2); // Allow up to two levels of parallel regions
-
-	while (1)
-	{
-		cnt++;
-		overall_progress.draw_header(data_name() + "  Epoch  " + std::to_string((long long)cnn.get_epoch() + 1), true);
-		// setup timer / progress for this one epoch
-		mojo::progress progress(train_samples, "  training:\t\t");
-		// set loss function
+	
+	cnt++;
+	overall_progress.draw_header(data_name() + "  Epoch  " + std::to_string((long long)cnn.get_epoch() + 1), true);
+	// setup timer / progress for this one epoch
+	mojo::progress progress(train_samples, "  training:\t\t");
+	// set loss function
 		cnn.start_epoch("cross_entropy");
 
 		// // manually loop through data. batches are handled internally. if data is to be shuffled, the must be performed externally
@@ -157,6 +153,8 @@ int main(int argc, char *argv[])
 		// 	// cnn.train_class_back();
 		// 	if (k % 1000 == 0) progress.draw_progress(k);
 		// }
+	omp_set_nested(1); // Enable nested parallelism
+    omp_set_max_active_levels(2); // Allow up to two levels of parallel regions
 
 		// #pragma omp parallel for schedule(dynamic)  // schedule dynamic to help make progress bar work correctly
 		// for (int k = 0; k<train_samples; k++)
@@ -166,13 +164,15 @@ int main(int argc, char *argv[])
 		// }
 	#pragma omp parallel num_threads(2) // Outer parallel region with 2 threads
     {
-        int job_id = omp_get_thread_num();
+        int worker_id = omp_get_thread_num();
         omp_set_num_threads(10); // Set the number of threads for each job
+		// std::cout << job_id << std::endl;
 
         #pragma omp parallel
         {
             int thread_id = omp_get_thread_num();
-			if (thread_id == 1)
+			// std::cout << thread_id << std::endl;
+			if (worker_id == 1)
 			{
 				for (int k = 0; k<train_samples; k++)
 					{
@@ -181,23 +181,16 @@ int main(int argc, char *argv[])
 						if (k % 1000 == 0) progress.draw_progress(k);
 					}
 			}else{
-					for (int k = 0; k<train_samples; k++)
+					while (1)
 					{
 						cnn.train_class_back();
-						// if (k % 1000 == 0) progress.draw_progress(k);
 					}
+					
 			}
 			
         }
     }
-		    // #pragma omp parallel for schedule(dynamic)
-			// for (int k = 0; k < train_samples; k++) {
-			// 	train_class(train_images[k], train_labels[k]);
-			// 	if (k % 1000 == 0) {
-			// 		#pragma omp critical
-			// 		draw_progress(k);
-			// 	}
-			// }
+
 
 		// draw weights of main convolution layers
 		#ifdef MOJO_CV3
@@ -205,62 +198,8 @@ int main(int argc, char *argv[])
 		mojo::show(mojo::draw_cnn_weights(cnn, "C2",mojo::tensorglow), 2, "C2 Weights");
 		#endif
 
-		break;
-		// cnn.end_epoch();
-		// float dt = progress.elapsed_seconds();
-		// std::cout << "  mini batch:\t\t" << mini_batch_size << "                               " << std::endl;
-		// std::cout << "  training time:\t" << dt << " seconds on " << cnn.get_thread_count() << " threads" << std::endl;
-		// std::cout << "  model updates:\t" << cnn.train_updates << " (" << (int)(100.f*(1. - (float)cnn.train_skipped / cnn.train_samples)) << "% of records)" << std::endl;
-		// std::cout << "  estimated accuracy:\t" << cnn.estimated_accuracy << "%" << std::endl;
 
 
-		/* if you want to run in-sample testing on the training set, include this code
-		// == run training set
-		progress.reset((int)train_images.size(), "  testing in-sample:\t");
-		float train_accuracy=test(cnn, train_images, train_labels);
-		std::cout << "  train accuracy:\t"<<train_accuracy<<"% ("<< 100.f - train_accuracy<<"% error)      "<<std::endl;
-		*/
-
-		// ==== run testing set
-		// progress.reset((int)test_images.size(), "  testing out-of-sample:\t");
-		// float accuracy = test(cnn, test_images, test_labels);
-		// std::cout << "  test accuracy:\t" << accuracy << "% (" << 100.f - accuracy << "% error)      " << std::endl;
-
-		// if accuracy is improving, reset the training logic that may be thinking about quitting
-		// if (accuracy > old_accuracy)
-		// {
-		// 	cnn.reset_smart_training();
-		// 	old_accuracy = accuracy;
-		// }
-
-		// // save model
-		// std::string model_file = "../models/snapshots/tmp_" + std::to_string((long long)cnn.get_epoch()) + ".txt";
-		// cnn.write(model_file,true);
-		// std::cout << "  saved model:\t\t" << model_file << std::endl << std::endl;
-
-		// // write log file
-		// std::string log_out;
-		// log_out += float2str(dt) + "\t";
-		// log_out += float2str(overall_progress.elapsed_seconds()) + "\t";
-		// log_out += float2str(cnn.get_learning_rate()) + "\t";
-		// log_out += model_file;
-		// log.add_table_row(cnn.estimated_accuracy, accuracy, log_out);
-		// // will write this every epoch
-		// log.write("../models/snapshots/mojo_mnist_log.htm");
-
-		// can't seem to improve
-		// if (cnn.elvis_left_the_building())
-		// {
-		// 	std::cout << "Elvis just left the building. No further improvement in training found.\nStopping.." << std::endl;
-		// 	break;
-		// }
-
-		// if (cnt==EPOCH_LIMIT) {
-		// 	std::cout << "Elvis just left the building. Too much iteration " << EPOCH_LIMIT << " \nStopping.." << std::endl;
-		// 	break;
-		// }
-
-	};
 	std::cout<< "1 epoch finished, total time: " <<std::endl;
 	// std::cout <<std::endl;
 	return 0;

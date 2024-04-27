@@ -1426,11 +1426,15 @@ public:
 	}
 
 	
-	bool train_class_back(){
+	void train_class_back(){
+
+
 		int my_batch_index = reserve_next_batch(false);
 		backward_hidden(my_batch_index);
 
-		return true;
+		// std::ostringstream msg;
+    	// msg << "Thread num: " << get_thread_num();
+		// std::cout << get_thread_num() << std::endl;
 	}
 
 	//----------------------------------------------------------------------------------------------------------
