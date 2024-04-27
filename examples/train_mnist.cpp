@@ -185,7 +185,6 @@ int main(int argc, char *argv[])
 					{
 						cnn.train_class_back();
 					}
-					
 			}
 			
         }

@@ -892,6 +892,7 @@ public:
 		if (filled == batch_open.size()) return BATCH_FILLED_COMPLETE; // all filled and complete
 		
 		// bail("threading error"); // should not get here  unless threading problem
+		return 0;
 	}
 
 	//----------------------------------------------------------------------------------------------------------
