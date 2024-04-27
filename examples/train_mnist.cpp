@@ -37,6 +37,7 @@
 #include <sstream>
 #include <fstream>
 #include <stdio.h>
+// #include <aligned_new>
 //#include <tchar.h>
 
 //#define MOJO_CV3
@@ -94,7 +95,7 @@ int main(int argc, char *argv[])
 	// !! the threading must be enabled with thread count prior to loading or creating a model !!
 
 	// std::cout << "_thread_count befor is : " <<  cnn.get_thread_count() <<std::endl;
-	cnn.enable_external_threads(5);
+	cnn.enable_external_threads(1);
 	// std::cout << "_thread_count after is : " <<  cnn.get_thread_count() <<std::endl;
 
 	cnn.set_mini_batch_size(mini_batch_size);
@@ -152,6 +153,29 @@ int main(int argc, char *argv[])
 			cnn.train_class(train_images[k].data(), train_labels[k]);
 			if (k % 1000 == 0) progress.draw_progress(k);
 		}
+
+		#pragma omp parallel for schedule(dynamic)  // schedule dynamic to help make progress bar work correctly
+		for (int k = 0; k<train_samples; k++)
+		{
+			cnn.train_class_back();
+			// if (k % 1000 == 0) progress.draw_progress(k);
+		}
+		    // #pragma omp parallel for schedule(dynamic)
+			// for (int k = 0; k < train_samples; k++) {
+			// 	train_class(train_images[k], train_labels[k]);
+			// 	if (k % 1000 == 0) {
+			// 		#pragma omp critical
+			// 		draw_progress(k);
+			// 	}
+			// }
+
+			// // Second parallel section for backward training (backpropagation)
+			// #pragma omp parallel for schedule(dynamic)
+			// for (int k = 0; k < train_samples; k++) {
+			// 	train_class_back();
+			// 	// Optionally update progress here if needed
+			// 	// if (k % 1000 == 0) draw_progress(k);
+			// }
 
 		// draw weights of main convolution layers
 		#ifdef MOJO_CV3
