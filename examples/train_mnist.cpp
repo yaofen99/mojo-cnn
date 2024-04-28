@@ -37,6 +37,7 @@
 #include <sstream>
 #include <fstream>
 #include <stdio.h>
+// #include <aligned_new>
 //#include <tchar.h>
 
 //#define MOJO_CV3
@@ -44,6 +45,8 @@
 #include <mojo.h>  
 #include <util.h>
 #include "mnist_parser.h"
+
+#define EPOCH_LIMIT 10
 
 const int mini_batch_size = 24;
 const float initial_learning_rate = 0.04f;
@@ -74,7 +77,7 @@ float test(mojo::network &cnn, const std::vector<std::vector<float>> &test_image
 }
 
 
-int main()
+int main(int argc, char *argv[])
 {
 	// ==== parse data
 	// array to hold image data (note that mojo does not require use of std::vector)
@@ -90,11 +93,15 @@ int main()
 	// ==== setup the network  - when you train you must specify an optimizer ("sgd", "rmsprop", "adagrad", "adam")
 	mojo::network cnn(solver.c_str());
 	// !! the threading must be enabled with thread count prior to loading or creating a model !!
-	cnn.enable_external_threads();
+
+	// std::cout << "_thread_count befor is : " <<  cnn.get_thread_count() <<std::endl;
+	cnn.enable_external_threads(10);
+	// std::cout << "_thread_count after is : " <<  cnn.get_thread_count() <<std::endl;
+
 	cnn.set_mini_batch_size(mini_batch_size);
 	cnn.set_smart_training(true); // automate training
 	cnn.set_learning_rate(initial_learning_rate);
-	
+
 	// Note, network descriptions can be read from a text file with similar format to the API
 	cnn.read("../models/mnist_quickstart.txt");
 
@@ -125,79 +132,68 @@ int main()
 	// setup timer/progress for overall training
 	mojo::progress overall_progress(-1, "  overall:\t\t");
 	const int train_samples = (int)train_images.size();
-	float old_accuracy = 0; 
-	while (1)
-	{
-		overall_progress.draw_header(data_name() + "  Epoch  " + std::to_string((long long)cnn.get_epoch() + 1), true);
-		// setup timer / progress for this one epoch
-		mojo::progress progress(train_samples, "  training:\t\t");
-		// set loss function
+	float old_accuracy = 0;
+
+	std::cout << "size of train_samples is : " <<  train_samples <<std::endl;
+
+	int cnt = 0;
+	
+	cnt++;
+	overall_progress.draw_header(data_name() + "  Epoch  " + std::to_string((long long)cnn.get_epoch() + 1), true);
+	// setup timer / progress for this one epoch
+	mojo::progress progress(train_samples, "  training:\t\t");
+	// set loss function
 		cnn.start_epoch("cross_entropy");
 
-		// manually loop through data. batches are handled internally. if data is to be shuffled, the must be performed externally
-		#pragma omp parallel for schedule(dynamic)  // schedule dynamic to help make progress bar work correctly
-		for (int k = 0; k<train_samples; k++)
-		{
-			cnn.train_class(train_images[k].data(), train_labels[k]);
-			if (k % 1000 == 0) progress.draw_progress(k);
-		}
+		// // manually loop through data. batches are handled internally. if data is to be shuffled, the must be performed externally
+		// #pragma omp parallel for schedule(dynamic)  // schedule dynamic to help make progress bar work correctly
+		// for (int k = 0; k<train_samples; k++)
+		// {
+		// 	cnn.train_class(train_images[k].data(), train_labels[k]);
+		// 	// cnn.train_class_back();
+		// 	if (k % 1000 == 0) progress.draw_progress(k);
+		// }
+	omp_set_nested(1); // Enable nested parallelism
+    omp_set_max_active_levels(2); // Allow up to two levels of parallel regions
+
+	#pragma omp parallel num_threads(1) // Outer parallel region with 2 threads
+    {
+        int worker_id = omp_get_thread_num();
+        omp_set_num_threads(10); // Set the number of threads for baseline
+		// std::cout << job_id << std::endl;
+
+        #pragma omp parallel
+        {
+            int thread_id = omp_get_thread_num();
+			// std::cout << thread_id << std::endl;
+			if (worker_id == 0)
+			{
+				for (int k = 0; k<train_samples; k++)
+					{
+						cnn.train_class(train_images[k].data(), train_labels[k]);
+						// cnn.train_class_back();
+						if (k % 1000 == 0) progress.draw_progress(k);
+					}
+			}else{
+					while (1)
+					{
+						cnn.train_class_back();
+					}
+			}
+			
+        }
+    }
+
 
 		// draw weights of main convolution layers
 		#ifdef MOJO_CV3
 		mojo::show(mojo::draw_cnn_weights(cnn, "C1",mojo::tensorglow), 2 /* scale x 2 */, "C1 Weights");
 		mojo::show(mojo::draw_cnn_weights(cnn, "C2",mojo::tensorglow), 2, "C2 Weights");
 		#endif
-		
-		cnn.end_epoch();
-		float dt = progress.elapsed_seconds();
-		std::cout << "  mini batch:\t\t" << mini_batch_size << "                               " << std::endl;
-		std::cout << "  training time:\t" << dt << " seconds on " << cnn.get_thread_count() << " threads" << std::endl;
-		std::cout << "  model updates:\t" << cnn.train_updates << " (" << (int)(100.f*(1. - (float)cnn.train_skipped / cnn.train_samples)) << "% of records)" << std::endl;
-		std::cout << "  estimated accuracy:\t" << cnn.estimated_accuracy << "%" << std::endl;
 
 
-		/* if you want to run in-sample testing on the training set, include this code
-		// == run training set
-		progress.reset((int)train_images.size(), "  testing in-sample:\t");
-		float train_accuracy=test(cnn, train_images, train_labels);
-		std::cout << "  train accuracy:\t"<<train_accuracy<<"% ("<< 100.f - train_accuracy<<"% error)      "<<std::endl;
-		*/
 
-		// ==== run testing set
-		progress.reset((int)test_images.size(), "  testing out-of-sample:\t");
-		float accuracy = test(cnn, test_images, test_labels);
-		std::cout << "  test accuracy:\t" << accuracy << "% (" << 100.f - accuracy << "% error)      " << std::endl;
-
-		// if accuracy is improving, reset the training logic that may be thinking about quitting
-		if (accuracy > old_accuracy)
-		{
-			cnn.reset_smart_training();
-			old_accuracy = accuracy;
-		}
-
-		// save model
-		std::string model_file = "../models/snapshots/tmp_" + std::to_string((long long)cnn.get_epoch()) + ".txt";
-		cnn.write(model_file,true);
-		std::cout << "  saved model:\t\t" << model_file << std::endl << std::endl;
-
-		// write log file
-		std::string log_out;
-		log_out += float2str(dt) + "\t";
-		log_out += float2str(overall_progress.elapsed_seconds()) + "\t";
-		log_out += float2str(cnn.get_learning_rate()) + "\t";
-		log_out += model_file;
-		log.add_table_row(cnn.estimated_accuracy, accuracy, log_out);
-		// will write this every epoch
-		log.write("../models/snapshots/mojo_mnist_log.htm");
-
-		// can't seem to improve
-		if (cnn.elvis_left_the_building())
-		{
-			std::cout << "Elvis just left the building. No further improvement in training found.\nStopping.." << std::endl;
-			break;
-		}
-
-	};
-	std::cout << std::endl;
+	std::cout<< "1 epoch finished, total time: " <<std::endl;
+	// std::cout <<std::endl;
 	return 0;
 }

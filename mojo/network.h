@@ -182,7 +182,7 @@ class network
 	double _running_sum_E;
 	cost_function *_cost_function;
 	solver *_solver;
-	static const unsigned char BATCH_RESERVED = 1, BATCH_FREE = 0, BATCH_COMPLETE = 2;
+	static const unsigned char BATCH_RESERVED = 1, BATCH_FREE = 0, BATCH_COMPLETE = 2, BATCH_WAITING = 3;
 	static const int BATCH_FILLED_COMPLETE = -2, BATCH_FILLED_IN_PROCESS = -1;
 #ifdef MOJO_OMP
 	omp_lock_t _lock_batch;
@@ -310,7 +310,7 @@ public:
 	void build_layer_sets()
 	{
 		int layer_cnt = (int)layer_sets.size();
-		if (layer_cnt<_thread_count) layer_sets.resize(_thread_count);
+		if (layer_cnt<_batch_size) layer_sets.resize(_batch_size);
 		// ToDo: add shrink back /  else if(layer_cnt>_thread_count)
 		sync_layer_sets();
 	}
@@ -526,19 +526,19 @@ public:
 	// the main forward pass 
 	// if calling over multiple threads, provide the thread index since the interal data is not otherwise thread safe
 	// train parameter is used to designate the forward pass is used in training (it turns on dropout layers, etc..)
-	float* forward(const float *in, int _thread_number=-1, int _train=0)
+	float* forward(const float *in, int batch_index=-1, int _train=0)
 	{
-		if(_thread_number<0) _thread_number=get_thread_num();
-		if (_thread_number > _thread_count && _thread_count>0) bail("need to enable threading\n");
-		if (_thread_number >= (int)layer_sets.size()) bail("need to enable threading\n");
+		// if(_thread_number<0) _thread_number=get_thread_num();
+		// if (_thread_number > _thread_count && _thread_count>0) bail("need to enable threading\n");
+		// if (_thread_number >= (int)layer_sets.size()) bail("need to enable threading\n");
 
 		//std::cout << get_thread_num() << ",";
 		// clear nodes to zero & find input layers
 		std::vector<base_layer *> inputs;
-		__for__(auto layer __in__ layer_sets[_thread_number])
+		__for__(auto layer __in__ layer_sets[batch_index])
 		{
 			if (dynamic_cast<input_layer*> (layer) != NULL)  inputs.push_back(layer);
-			layer->set_threading(_internal_thread_count);
+			layer->set_threading(_batch_size);
 			layer->node.fill(0.f);
 		}
 		// first layer assumed input. copy input to it 
@@ -555,7 +555,7 @@ public:
 		//for (int i = 0; i < layer->node.size(); i++)
 		//	layer_sets[_thread_number][0]->node.x[i] = in[i];
 		// for all layers
-		__for__(auto layer __in__ layer_sets[_thread_number])
+		__for__(auto layer __in__ layer_sets[batch_index])
 		{
 			// add bias and activate these outputs (they should all be summed up from other branches at this point)
 			//for(int j=0; j<layer->node.chans; j+=10) for (int i=0; i<layer->node.cols*layer->node.rows; i+=10)	std::cout<< layer->node.x[i+j*layer->node.chan_stride] <<"|";
@@ -594,7 +594,7 @@ public:
 		}
 		std::cout << "\n";
 	*/
-		return layer_sets[_thread_number][layer_sets[_thread_number].size()-1]->node.x;
+		return layer_sets[batch_index][layer_sets[batch_index].size()-1]->node.x;
 	}
 
 	//----------------------------------------------------------------------------------------------------------
@@ -872,20 +872,25 @@ public:
 	// return index of next free batch
 	// or returns -2 (BATCH_FILLED_COMPLETE) if no free batches - all complete (need a sync call)
 	// or returns -1 (BATCH_FILLED_IN_PROCESS) if no free batches - some still in progress (must wait to see if one frees)
-	int get_next_open_batch()
+	int get_next_open_batch(bool isForward = true)
 	{
 		int reserved = 0;
 		int filled = 0;
 		for (int i = 0; i<batch_open.size(); i++)
 		{
-			if (batch_open[i] == BATCH_FREE) return i;
+			if(isForward){
+				if (batch_open[i] == BATCH_FREE) return i;
+			}else{
+				if (batch_open[i] == BATCH_WAITING) return i;
+			}
+
 			if (batch_open[i] == BATCH_RESERVED) reserved++;
 			if (batch_open[i] == BATCH_COMPLETE) filled++;
 		}
 		if (reserved>0) return BATCH_FILLED_IN_PROCESS; // all filled but wainting for reserves
 		if (filled == batch_open.size()) return BATCH_FILLED_COMPLETE; // all filled and complete
 		
-		bail("threading error"); // should not get here  unless threading problem
+		// bail("threading error"); // should not get here  unless threading problem
 	}
 
 	//----------------------------------------------------------------------------------------------------------
@@ -949,16 +954,25 @@ public:
 	}
 
 	// reserve_next.. is used to reserve a space in the minibatch for the existing training sample
-	int reserve_next_batch()
+	int reserve_next_batch(bool isForward = true)
 	{
+		// if (!isForward)
+		// {
+		// 	bail("req from back");
+		// }
+		
 		lock_batch();
 		int my_batch_index = -3;
 		while (my_batch_index < 0)
-		{
-			my_batch_index = get_next_open_batch();
+		{	
+			my_batch_index = get_next_open_batch(isForward);
 
 			if (my_batch_index >= 0) // valid index
 			{
+				// if (!isForward)
+				// {
+				// 	bail("respond from back");
+				// }
 				batch_open[my_batch_index] = BATCH_RESERVED;
 				unlock_batch();
 				return my_batch_index;
@@ -1144,9 +1158,9 @@ public:
 
 	}
 	// finish back propogation through the hidden layers
-	void backward_hidden(const int my_batch_index, const int thread_number)
+	void backward_hidden(const int my_batch_index)
 	{
-		const int layer_cnt = (int)layer_sets[thread_number].size();
+		const int layer_cnt = (int)layer_sets[my_batch_index].size();
 		const int last_layer_index = layer_cnt - 1;
 		base_layer *layer;// = layer_sets[thread_number][last_layer_index];
 
@@ -1156,7 +1170,7 @@ public:
 
 		for (int k = last_layer_index; k >= 0; k--)
 		{
-			layer = layer_sets[thread_number][k];
+			layer = layer_sets[my_batch_index][k];
 			// all the signals should be summed up to this layer by now, so we go through and take the grad of activiation
 			int nodes = layer->node.size();
 			// already did last layer, so skip it
@@ -1182,7 +1196,7 @@ public:
 		dbias_sets[my_batch_index].resize(layer_cnt);
 		for (int k = last_layer_index; k >= 0; k--)
 		{
-			layer = layer_sets[thread_number][k];
+			layer = layer_sets[my_batch_index][k];
 
 			__for__(auto &link __in__ layer->backward_linked_layers)
 			{
@@ -1288,6 +1302,10 @@ public:
 		mojo::matrix augmented_input = make_input(in, thread_number);
 
 /*/
+		int my_batch_index = reserve_next_batch();
+		// out of data or an error if index is negative
+		if (my_batch_index < 0) return false;
+
 		float *input = in;
 		mojo::matrix augmented_input;
 		if (use_augmentation > 0)
@@ -1295,7 +1313,7 @@ public:
 			//augment_h_flip = flip_h;
 			//augment_v_flip = flip_v;
 			// copy input to matrix type
-			mojo::matrix m(layer_sets[thread_number][0]->node.cols, layer_sets[thread_number][0]->node.rows, layer_sets[thread_number][0]->node.chans, in);
+			mojo::matrix m(layer_sets[my_batch_index][0]->node.cols, layer_sets[my_batch_index][0]->node.rows, layer_sets[my_batch_index][0]->node.chans, in);
 #if defined(MOJO_CV2) || defined(MOJO_CV3)
 			if (augment_theta > 0 || augment_scale > 0)
 			{
@@ -1320,20 +1338,18 @@ public:
 
 		// get next free mini_batch slot
 		// this is tied to the current state of the model
-		int my_batch_index = reserve_next_batch();
-		// out of data or an error if index is negative
-		if (my_batch_index < 0) return false;
-		// run through forward to get nodes activated
-		forward(input, thread_number, 1);
-		// set all deltas to zero
-		__for__(auto layer __in__ layer_sets[thread_number]) layer->delta.fill(0.f);
 
-		int layer_cnt = (int)layer_sets[thread_number].size();
+		// run through forward to get nodes activated
+		forward(input, my_batch_index, 1);
+		// set all deltas to zero
+		__for__(auto layer __in__ layer_sets[my_batch_index]) layer->delta.fill(0.f);
+
+		int layer_cnt = (int)layer_sets[my_batch_index].size();
 
 		// calc delta for last layer to prop back up through network
 		// d = (target-out)* grad_activiation(out)
 		const int last_layer_index = layer_cnt - 1;
-		base_layer *layer = layer_sets[thread_number][last_layer_index];
+		base_layer *layer = layer_sets[my_batch_index][last_layer_index];
 		const int layer_node_size = layer->node.size();
 		const int layer_delta_size = layer->delta.size();
 
@@ -1398,10 +1414,30 @@ public:
 			unlock_batch();
 			return false;  // return without doing training
 		}
-		backward_hidden(my_batch_index, thread_number);
+		
+		lock_batch();
+		batch_open[my_batch_index] = BATCH_WAITING;
+		unlock_batch();
+		
+		backward_hidden(my_batch_index);
+
+		return false;  // return without doing training
+		// backward_hidden(my_batch_index, thread_number);
 		return true;
 	}
+
 	
+	void train_class_back(){
+
+
+		int my_batch_index = reserve_next_batch(false);
+		backward_hidden(my_batch_index);
+
+		// std::ostringstream msg;
+    	// msg << "Thread num: " << get_thread_num();
+		// std::cout << get_thread_num() << std::endl;
+	}
+
 	//----------------------------------------------------------------------------------------------------------
 	// T R A I N   T A R G E T 
 	//
@@ -1514,7 +1550,7 @@ public:
 			unlock_batch();
 			return false;  // return without doing training
 		}
-		backward_hidden(my_batch_index, thread_number);
+		backward_hidden(my_batch_index);
 		return true;
 	}
 
