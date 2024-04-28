@@ -174,13 +174,7 @@ int main(int argc, char *argv[])
 						// cnn.train_class_back();
 						if (k % 1000 == 0) progress.draw_progress(k);
 					}
-			}else{
-					while (1)
-					{
-						cnn.train_class_back();
-					}
 			}
-			
         }
     }
 
@@ -192,8 +186,9 @@ int main(int argc, char *argv[])
 		#endif
 
 
-
-	std::cout<< "1 epoch finished, total time: " <<std::endl;
+	std::cout<< "\n1 epoch finished, total time: " << progress.elapsed_seconds() << " on " 
+				<< cnn.get_thread_count() << " threads." <<std::endl;
+		// std::cout<< "1 epoch finished, total time: " <<std::endl;
 	// std::cout <<std::endl;
 	return 0;
 }
