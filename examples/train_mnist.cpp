@@ -145,14 +145,6 @@ int main(int argc, char *argv[])
 	// set loss function
 		cnn.start_epoch("cross_entropy");
 
-		// // manually loop through data. batches are handled internally. if data is to be shuffled, the must be performed externally
-		// #pragma omp parallel for schedule(dynamic)  // schedule dynamic to help make progress bar work correctly
-		// for (int k = 0; k<train_samples; k++)
-		// {
-		// 	cnn.train_class(train_images[k].data(), train_labels[k]);
-		// 	// cnn.train_class_back();
-		// 	if (k % 1000 == 0) progress.draw_progress(k);
-		// }
 	omp_set_nested(1); // Enable nested parallelism
     omp_set_max_active_levels(2); // Allow up to two levels of parallel regions
 
