@@ -156,12 +156,6 @@ int main(int argc, char *argv[])
 	omp_set_nested(1); // Enable nested parallelism
     omp_set_max_active_levels(2); // Allow up to two levels of parallel regions
 
-		// #pragma omp parallel for schedule(dynamic)  // schedule dynamic to help make progress bar work correctly
-		// for (int k = 0; k<train_samples; k++)
-		// {
-		// 	cnn.train_class_back();
-		// 	// if (k % 1000 == 0) progress.draw_progress(k);
-		// }
 	#pragma omp parallel num_threads(2) // Outer parallel region with 2 threads
     {
         int worker_id = omp_get_thread_num();
