@@ -170,7 +170,7 @@ int main(int argc, char *argv[])
 					}
 			}else{
 								// std::cout << thread_id << std::endl;
-					while (1)
+				for (int k = 0; k<train_samples; k++)
 					{
 						cnn.train_class_back();
 					}
