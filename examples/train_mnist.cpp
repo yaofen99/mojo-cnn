@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
 
 
 
-	std::cout<< "1 epoch finished, total time: " <<std::endl;
-	// std::cout <<std::endl;
+	std::cout<< "\n1 epoch finished, total time: " << progress.elapsed_seconds() << " on " 
+				<< cnn.get_thread_count() << " threads." <<std::endl;	
 	return 0;
 }
