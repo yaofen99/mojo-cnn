@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
 	#pragma omp parallel num_threads(1) // Outer parallel region with 2 threads
     {
         int worker_id = omp_get_thread_num();
-        omp_set_num_threads(10); // Set the number of threads for each job
+        omp_set_num_threads(10); // Set the number of threads for baseline
 		// std::cout << job_id << std::endl;
 
         #pragma omp parallel
