@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
 	omp_set_nested(1); // Enable nested parallelism
     omp_set_max_active_levels(2); // Allow up to two levels of parallel regions
 
-	#pragma omp parallel num_threads(2) // Outer parallel region with 2 threads
+	#pragma omp parallel num_threads(1) // Outer parallel region with 2 threads
     {
         int worker_id = omp_get_thread_num();
         omp_set_num_threads(10); // Set the number of threads for each job
@@ -166,7 +166,7 @@ int main(int argc, char *argv[])
         {
             int thread_id = omp_get_thread_num();
 			// std::cout << thread_id << std::endl;
-			if (worker_id == 1)
+			if (worker_id == 0)
 			{
 				for (int k = 0; k<train_samples; k++)
 					{

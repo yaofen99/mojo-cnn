@@ -892,7 +892,6 @@ public:
 		if (filled == batch_open.size()) return BATCH_FILLED_COMPLETE; // all filled and complete
 		
 		// bail("threading error"); // should not get here  unless threading problem
-		return 0;
 	}
 
 	//----------------------------------------------------------------------------------------------------------
@@ -1420,6 +1419,8 @@ public:
 		lock_batch();
 		batch_open[my_batch_index] = BATCH_WAITING;
 		unlock_batch();
+		
+		backward_hidden(my_batch_index);
 
 		return false;  // return without doing training
 		// backward_hidden(my_batch_index, thread_number);
