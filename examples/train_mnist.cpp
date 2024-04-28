@@ -151,15 +151,17 @@ int main(int argc, char *argv[])
 	#pragma omp parallel num_threads(2) // Outer parallel region with 2 threads
     {
         int worker_id = omp_get_thread_num();
-        omp_set_num_threads(10); // Set the number of threads for each job
+        if(worker_id == 0) omp_set_num_threads(3); // Set the number of threads for forward propagation
+        if(worker_id == 1) omp_set_num_threads(5); // Set the number of threads for backward propagation
 		// std::cout << job_id << std::endl;
 
         #pragma omp parallel
         {
             int thread_id = omp_get_thread_num();
 			// std::cout << thread_id << std::endl;
-			if (worker_id == 1)
+			if (worker_id == 0)
 			{
+				// std::cout << thread_id << std::endl;
 				for (int k = 0; k<train_samples; k++)
 					{
 						cnn.train_class(train_images[k].data(), train_labels[k]);
@@ -167,6 +169,7 @@ int main(int argc, char *argv[])
 						if (k % 1000 == 0) progress.draw_progress(k);
 					}
 			}else{
+								// std::cout << thread_id << std::endl;
 					while (1)
 					{
 						cnn.train_class_back();
